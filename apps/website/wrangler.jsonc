@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "depedtoolkit-website",
+  "compatibility_date": "2026-09-15",
+  "assets": {
+    "directory": "./dist",
+    // Marketing site is multi-page-ish but rendered by the SPA router,
+    // so unknown paths fall through to index.html.
+    "not_found_handling": "single-page-application"
+  }
+}

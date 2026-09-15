@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "depedtoolkit-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "depedtoolkit",
+      // Replace with the id printed by: wrangler d1 create depedtoolkit
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Uploaded class pictures / imported Excel files land here.
+  // Uncomment once created: wrangler r2 bucket create depedtoolkit-uploads
+  // "r2_buckets": [{ "binding": "UPLOADS", "bucket_name": "depedtoolkit-uploads" }],
+
+  "vars": {
+    "APP_ORIGIN": "http://localhost:5174"
+  }
+  // Secrets (set with `wrangler secret put`):
+  //   SESSION_SECRET — HMAC key for signing session cookies
+}

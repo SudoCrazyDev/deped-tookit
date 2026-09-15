@@ -1,0 +1,19 @@
+{
+  "name": "depedtoolkit",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./apps/*\" dev",
+    "dev:website": "pnpm --filter website dev",
+    "dev:app": "pnpm --filter app dev",
+    "dev:api": "pnpm --filter api dev",
+    "build": "pnpm --filter \"./apps/*\" build",
+    "typecheck": "pnpm --filter \"./apps/*\" typecheck",
+    "deploy": "pnpm --filter \"./apps/*\" deploy"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "wrangler": "^4.59.3"
+  }
+}

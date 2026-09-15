@@ -1,0 +1,25 @@
+{
+  "name": "api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "deploy": "wrangler deploy",
+    "cf-typegen": "wrangler types",
+    "db:migrate:local": "wrangler d1 migrations apply depedtoolkit --local",
+    "db:migrate:remote": "wrangler d1 migrations apply depedtoolkit --remote",
+    "db:console": "wrangler d1 execute depedtoolkit --local --command"
+  },
+  "dependencies": {
+    "hono": "^4.9.6",
+    "zod": "^4.1.8",
+    "@hono/zod-validator": "^0.7.2"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260915.1",
+    "typescript": "^5.9.2",
+    "wrangler": "^4.59.3"
+  }
+}
