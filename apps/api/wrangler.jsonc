@@ -6,6 +6,11 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
 
+  // Binds the worker to the hostname and creates its DNS record on deploy.
+  // Requires depedtoolkit.com to be an active zone in this Cloudflare account
+  // first — until the nameservers have moved, a deploy fails here.
+  "routes": [{ "pattern": "api.depedtoolkit.com", "custom_domain": true }],
+
   "d1_databases": [
     {
       "binding": "DB",

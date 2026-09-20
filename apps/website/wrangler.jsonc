@@ -2,6 +2,13 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "depedtoolkit-website",
   "compatibility_date": "2026-09-15",
+
+  // Apex and www both serve the marketing site. See apps/api/wrangler.jsonc:
+  // needs the zone active before it will deploy.
+  "routes": [
+    { "pattern": "depedtoolkit.com", "custom_domain": true },
+    { "pattern": "www.depedtoolkit.com", "custom_domain": true }
+  ],
   "assets": {
     "directory": "./dist",
     // Marketing site is multi-page-ish but rendered by the SPA router,

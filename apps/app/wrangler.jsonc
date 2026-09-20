@@ -2,6 +2,9 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "depedtoolkit-app",
   "compatibility_date": "2026-09-15",
+
+  // See apps/api/wrangler.jsonc: needs the zone active before it will deploy.
+  "routes": [{ "pattern": "app.depedtoolkit.com", "custom_domain": true }],
   "assets": {
     "directory": "./dist",
     // Client-side router owns every route below /, so 404s serve index.html.
