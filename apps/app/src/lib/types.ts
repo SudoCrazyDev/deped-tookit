@@ -5,7 +5,10 @@
 export type Teacher = {
   id: string;
   email: string;
-  fullName: string;
+  /** Not collected at signup, so absent until the teacher fills in a profile. */
+  fullName: string | null;
+  /** E.164 Philippine mobile number, e.g. "+639171234567". */
+  contactNumber: string | null;
   school: string | null;
 };
 

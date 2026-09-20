@@ -1,2 +1,12 @@
 # Copy to .dev.vars for local development (never commit .dev.vars).
 SESSION_SECRET=dev-only-change-me
+
+# Turnstile widget secret, from the same widget as VITE_TURNSTILE_SITE_KEY.
+# Signup fails closed without it — a missing secret rejects signups rather
+# than waving them through unchecked.
+#
+# Cloudflare's test secrets, which pair with the test sitekeys:
+#   1x0000000000000000000000000000000AA  always passes
+#   2x0000000000000000000000000000000AA  always fails
+#   3x0000000000000000000000000000000AA  reports "token already spent"
+TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA

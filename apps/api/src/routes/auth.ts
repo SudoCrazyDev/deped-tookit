@@ -6,6 +6,7 @@ import type { Env } from "../types";
 import { credentials, signupInput } from "../schema";
 import { teachers, UniqueViolationError } from "../db";
 import { hashPassword, verifyPassword } from "../lib/crypto";
+import { verifyTurnstile } from "../lib/turnstile";
 import {
   SESSION_COOKIE,
   clearSessionCookie,
@@ -18,14 +19,47 @@ import {
 export const auth = new Hono<Env>();
 
 auth.post("/signup", zValidator("json", signupInput), async (c) => {
-  const { email, password, fullName, school } = c.req.valid("json");
+  const { email, password, contactNumber, fullName, school, turnstileToken } =
+    c.req.valid("json");
+
+  // Fail closed. A missing secret is a deployment mistake, and the safe reading
+  // of it is "nobody gets in", not "everybody gets in without a bot check".
+  if (!c.env.TURNSTILE_SECRET_KEY) {
+    console.error("TURNSTILE_SECRET_KEY is not set — refusing signups");
+    throw new HTTPException(503, {
+      message: "Signup is temporarily unavailable. Please try again later.",
+    });
+  }
+
+  const verdict = await verifyTurnstile(
+    c.env.TURNSTILE_SECRET_KEY,
+    turnstileToken,
+    c.req.header("CF-Connecting-IP"),
+  );
+
+  if (!verdict.ok) {
+    if (verdict.reason === "unavailable") {
+      console.error("Turnstile siteverify unavailable:", verdict.codes.join(","));
+      throw new HTTPException(503, {
+        message: "Could not complete the human check. Please try again.",
+      });
+    }
+    // The widget is reset on the client for both of these, so retrying works.
+    throw new HTTPException(400, {
+      message:
+        verdict.reason === "expired"
+          ? "That human check expired. Please try again."
+          : "Human check failed. Please try again.",
+    });
+  }
 
   let teacher;
   try {
     teacher = await teachers.create(c.env.DB, {
       email: email.toLowerCase(),
       passwordHash: await hashPassword(password),
-      fullName,
+      contactNumber,
+      fullName: fullName ?? null,
       school: school ?? null,
     });
   } catch (err) {

@@ -5,6 +5,8 @@ export type Bindings = {
   DB: Database;
   SESSION_SECRET: string;
   APP_ORIGIN: string;
+  /** Turnstile widget secret. Signup fails closed if this is missing. */
+  TURNSTILE_SECRET_KEY: string;
   // UPLOADS: R2Bucket;  // enable alongside the r2_buckets binding in wrangler.jsonc
 };
 
@@ -21,7 +23,10 @@ export type Env = { Bindings: Bindings; Variables: Variables };
 export type Teacher = {
   id: string;
   email: string;
-  fullName: string;
+  /** Not collected at signup, so absent until the teacher fills in a profile. */
+  fullName: string | null;
+  /** E.164 Philippine mobile number, e.g. "+639171234567". */
+  contactNumber: string | null;
   school: string | null;
 };
 

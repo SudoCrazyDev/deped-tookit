@@ -12,7 +12,8 @@ import type { WeightProfile } from "../lib/grading";
 export type TeacherRow = {
   id: string;
   email: string;
-  full_name: string;
+  full_name: string | null;
+  contact_number: string | null;
   school: string | null;
 };
 
@@ -52,6 +53,7 @@ export const toTeacher = (r: TeacherRow): Teacher => ({
   id: r.id,
   email: r.email,
   fullName: r.full_name,
+  contactNumber: r.contact_number,
   school: r.school,
 });
 

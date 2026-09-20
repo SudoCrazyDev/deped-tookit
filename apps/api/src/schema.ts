@@ -14,8 +14,21 @@ export const credentials = z.object({
   password: z.string().min(8).max(200),
 });
 
+/**
+ * A Philippine mobile number in E.164 form: +63 then the ten-digit subscriber
+ * number, which always begins with 9. Teachers type the ten digits and the
+ * client prepends +63, so anything else reaching here is a bad request.
+ */
+export const phContactNumber = z
+  .string()
+  .trim()
+  .regex(/^\+639\d{9}$/, "Enter a Philippine mobile number, e.g. +63 917 123 4567");
+
 export const signupInput = credentials.extend({
-  fullName: z.string().trim().min(1).max(120),
+  contactNumber: phContactNumber,
+  /** Turnstile token from the signup widget. Capped at Cloudflare's own limit. */
+  turnstileToken: z.string().min(1, "Complete the human check").max(2048),
+  fullName: z.string().trim().min(1).max(120).optional(),
   school: z.string().trim().max(160).optional(),
 });
 

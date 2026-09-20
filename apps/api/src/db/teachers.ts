@@ -6,21 +6,40 @@ import { rethrowAsUniqueViolation } from "./errors";
 /** Throws UniqueViolationError("teachers.email") if the address is taken. */
 export async function create(
   db: Database,
-  input: { email: string; passwordHash: string; fullName: string; school: string | null },
+  input: {
+    email: string;
+    passwordHash: string;
+    contactNumber: string;
+    fullName: string | null;
+    school: string | null;
+  },
 ): Promise<Teacher> {
   const id = crypto.randomUUID();
 
   await rethrowAsUniqueViolation("teachers.email", () =>
     db
       .prepare(
-        `INSERT INTO teachers (id, email, password_hash, full_name, school)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO teachers (id, email, password_hash, full_name, contact_number, school)
+         VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .bind(id, input.email, input.passwordHash, input.fullName, input.school)
+      .bind(
+        id,
+        input.email,
+        input.passwordHash,
+        input.fullName,
+        input.contactNumber,
+        input.school,
+      )
       .run(),
   );
 
-  return { id, email: input.email, fullName: input.fullName, school: input.school };
+  return {
+    id,
+    email: input.email,
+    fullName: input.fullName,
+    contactNumber: input.contactNumber,
+    school: input.school,
+  };
 }
 
 /**
@@ -32,7 +51,10 @@ export async function findByEmailWithHash(
   email: string,
 ): Promise<{ teacher: Teacher; passwordHash: string } | null> {
   const row = await db
-    .prepare("SELECT id, email, password_hash, full_name, school FROM teachers WHERE email = ?")
+    .prepare(
+      `SELECT id, email, password_hash, full_name, contact_number, school
+         FROM teachers WHERE email = ?`,
+    )
     .bind(email)
     .first<TeacherWithHashRow>();
 
@@ -64,7 +86,7 @@ export async function findBySession(
 ): Promise<Teacher | null> {
   const row = await db
     .prepare(
-      `SELECT t.id, t.email, t.full_name, t.school
+      `SELECT t.id, t.email, t.full_name, t.contact_number, t.school
          FROM sessions s
          JOIN teachers t ON t.id = s.teacher_id
         WHERE s.id = ? AND s.expires_at > unixepoch()`,

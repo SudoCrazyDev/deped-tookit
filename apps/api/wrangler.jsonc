@@ -10,8 +10,7 @@
     {
       "binding": "DB",
       "database_name": "depedtoolkit",
-      // Replace with the id printed by: wrangler d1 create depedtoolkit
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "database_id": "a10dde31-ac36-468e-8a37-9f9d853e7a01",
       "migrations_dir": "migrations"
     }
   ],
