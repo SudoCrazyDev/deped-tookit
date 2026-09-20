@@ -1,0 +1,70 @@
+name: Deploy App
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "apps/app/**"
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/deploy-app.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-app
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Vite inlines these at build time, so a missing one is baked into the
+      # bundle rather than failing at runtime. Both defaults are wrong in
+      # production and fail quietly, so the build stops instead:
+      #
+      #   VITE_API_URL empty  -> requests go to the app's own origin, which
+      #                          serves static assets only, so every call 404s.
+      #   sitekey empty       -> the page falls back to Cloudflare's test
+      #                          sitekey and issues dummy tokens, which the real
+      #                          secret rejects. Signup breaks for everyone.
+      - name: Check required build variables
+        run: |
+          missing=0
+          for v in VITE_API_URL VITE_TURNSTILE_SITE_KEY; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Repository variable $v is not set (Settings > Secrets and variables > Actions > Variables)."
+              missing=1
+            fi
+          done
+          exit $missing
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY }}
+
+      # `build` runs `tsc -b && vite build`, so this typechecks too.
+      - name: Build
+        working-directory: apps/app
+        run: pnpm build
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY }}
+
+      - name: Deploy
+        working-directory: apps/app
+        run: pnpm exec wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

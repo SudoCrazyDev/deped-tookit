@@ -1,0 +1,74 @@
+name: Deploy API
+
+# Each app deploys on its own so a failing marketing-site build cannot hold
+# back an API fix. Dependency and lockfile changes touch every build, so they
+# trigger all three.
+on:
+  push:
+    branches: [master]
+    paths:
+      - "apps/api/**"
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/deploy-api.yml"
+  workflow_dispatch:
+
+# Never let two deploys of the same worker overlap. Not cancel-in-progress:
+# a half-finished deploy is worse than a queued one.
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm --filter api typecheck
+
+      # wrangler.jsonc holds the localhost origin, which is right for
+      # `wrangler dev` and wrong for production: the app is a separate worker
+      # on its own origin, and credentialed requests from it would be refused
+      # by CORS. Overridden at deploy rather than committed, since it differs
+      # per environment.
+      - name: Check required deploy variables
+        run: |
+          if [ -z "$APP_ORIGIN" ]; then
+            echo "::error::Repository variable APP_ORIGIN is not set (Settings > Secrets and variables > Actions > Variables). It must be the deployed app's origin, e.g. https://depedtoolkit-app.<subdomain>.workers.dev"
+            exit 1
+          fi
+        env:
+          APP_ORIGIN: ${{ vars.APP_ORIGIN }}
+
+      # Migrations run before the deploy so a column exists by the time the new
+      # code reads it. Wrangler tracks which have been applied, so this is a
+      # no-op when there is nothing new.
+      - name: Apply D1 migrations
+        working-directory: apps/api
+        run: pnpm exec wrangler d1 migrations apply depedtoolkit --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # Worker secrets (SESSION_SECRET, TURNSTILE_SECRET_KEY) are set once with
+      # `wrangler secret put` and survive deploys, so they are not touched here.
+      - name: Deploy
+        working-directory: apps/api
+        run: pnpm exec wrangler deploy --var "APP_ORIGIN:$APP_ORIGIN"
+        env:
+          APP_ORIGIN: ${{ vars.APP_ORIGIN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

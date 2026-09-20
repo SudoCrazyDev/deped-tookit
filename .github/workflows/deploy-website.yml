@@ -1,0 +1,49 @@
+name: Deploy Website
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "apps/website/**"
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/deploy-website.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-website
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Unlike the app, this one has a sensible committed default
+      # (src/config.ts points at the production app), so an unset variable
+      # degrades to "correct for production" rather than to something broken.
+      # It still needs overriding to aim the site at a preview deployment.
+      - name: Build
+        working-directory: apps/website
+        run: pnpm build
+        env:
+          VITE_APP_URL: ${{ vars.VITE_APP_URL }}
+
+      - name: Deploy
+        working-directory: apps/website
+        run: pnpm exec wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
