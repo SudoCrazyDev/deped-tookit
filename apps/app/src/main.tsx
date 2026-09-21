@@ -8,6 +8,7 @@ import { Login } from "@/pages/Login";
 import { Signup } from "@/pages/Signup";
 import { Onboarding } from "@/pages/Onboarding";
 import { Dashboard } from "@/pages/Dashboard";
+import { Advisory } from "@/pages/Advisory";
 import { Profile } from "@/pages/Profile";
 import { SectionDetail } from "@/pages/SectionDetail";
 import { Toaster } from "@/components/ui/sonner";
@@ -31,6 +32,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="/onboarding" element={<Onboarding />} />
             <Route element={<RequireAuth />}>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/advisory" element={<Advisory />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/sections/:sectionId" element={<SectionDetail />} />
             </Route>

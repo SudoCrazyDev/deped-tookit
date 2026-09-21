@@ -129,3 +129,48 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* The navigation drawer (components/ui/sheet), which stands in for the fixed
+   sidebar on small screens. Radix flips `data-state` on open and close and
+   waits for the animation to finish before unmounting, so both directions are
+   real keyframes rather than a transition on a mounted element. The block
+   above still applies: with reduced motion these collapse to nothing. */
+@keyframes sheet-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-in-from-left {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes sheet-out-to-left {
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+[data-slot="sheet-overlay"][data-state="open"] {
+  animation: sheet-fade-in 0.2s ease-out;
+}
+
+[data-slot="sheet-overlay"][data-state="closed"] {
+  animation: sheet-fade-out 0.2s ease-in;
+}
+
+[data-slot="sheet-content"][data-side="left"][data-state="open"] {
+  animation: sheet-in-from-left 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+[data-slot="sheet-content"][data-side="left"][data-state="closed"] {
+  animation: sheet-out-to-left 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+}
