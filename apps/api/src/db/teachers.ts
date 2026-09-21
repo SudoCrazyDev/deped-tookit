@@ -1,6 +1,11 @@
 import type { Database } from "./database";
-import type { Teacher } from "../types";
-import { toTeacher, type TeacherRow, type TeacherWithHashRow } from "./mappers";
+import type { OnboardingInput, Teacher } from "../types";
+import {
+  teacherColumns,
+  toTeacher,
+  type TeacherRow,
+  type TeacherWithHashRow,
+} from "./mappers";
 import { rethrowAsUniqueViolation } from "./errors";
 
 /** Throws UniqueViolationError("teachers.email") if the address is taken. */
@@ -39,7 +44,53 @@ export async function create(
     fullName: input.fullName,
     contactNumber: input.contactNumber,
     school: input.school,
+    // The onboarding wizard fills these in; a brand-new teacher has none of
+    // them, and the null `onboardedAt` is what sends them to it.
+    region: null,
+    division: null,
+    schoolId: null,
+    schoolYear: null,
+    schoolHead: null,
+    role: null,
+    gradeLevel: null,
+    onboardedAt: null,
   };
+}
+
+/**
+ * Stores the finished onboarding wizard and marks the teacher as onboarded.
+ *
+ * Written as one statement so a teacher is never left half-onboarded, and
+ * `RETURNING` hands back the updated row so the caller does not read again.
+ */
+export async function completeOnboarding(
+  db: Database,
+  teacherId: string,
+  input: OnboardingInput,
+): Promise<Teacher | null> {
+  const row = await db
+    .prepare(
+      `UPDATE teachers
+          SET region = ?, division = ?, school_id = ?, school = ?,
+              school_year = ?, school_head = ?, teacher_role = ?,
+              grade_level = ?, onboarded_at = unixepoch()
+        WHERE id = ?
+      RETURNING ${teacherColumns()}`,
+    )
+    .bind(
+      input.region,
+      input.division,
+      input.schoolId,
+      input.schoolName,
+      input.schoolYear,
+      input.schoolHead,
+      input.role,
+      input.gradeLevel,
+      teacherId,
+    )
+    .first<TeacherRow>();
+
+  return row ? toTeacher(row) : null;
 }
 
 /**
@@ -52,7 +103,7 @@ export async function findByEmailWithHash(
 ): Promise<{ teacher: Teacher; passwordHash: string } | null> {
   const row = await db
     .prepare(
-      `SELECT id, email, password_hash, full_name, contact_number, school
+      `SELECT ${teacherColumns()}, password_hash
          FROM teachers WHERE email = ?`,
     )
     .bind(email)
@@ -86,7 +137,7 @@ export async function findBySession(
 ): Promise<Teacher | null> {
   const row = await db
     .prepare(
-      `SELECT t.id, t.email, t.full_name, t.contact_number, t.school
+      `SELECT ${teacherColumns("t")}
          FROM sessions s
          JOIN teachers t ON t.id = s.teacher_id
         WHERE s.id = ? AND s.expires_at > unixepoch()`,

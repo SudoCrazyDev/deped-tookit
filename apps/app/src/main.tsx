@@ -6,6 +6,7 @@ import { AuthProvider } from "@/lib/auth";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Login } from "@/pages/Login";
 import { Signup } from "@/pages/Signup";
+import { Onboarding } from "@/pages/Onboarding";
 import { Dashboard } from "@/pages/Dashboard";
 import { SectionDetail } from "@/pages/SectionDetail";
 import { Toaster } from "@/components/ui/sonner";
@@ -23,6 +24,10 @@ createRoot(document.getElementById("root")!).render(
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            {/* Full-screen and outside RequireAuth: it does its own
+                signed-in check, and gating it on being onboarded would
+                be the loop it exists to break. */}
+            <Route path="/onboarding" element={<Onboarding />} />
             <Route element={<RequireAuth />}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/sections/:sectionId" element={<SectionDetail />} />

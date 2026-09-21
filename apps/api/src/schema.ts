@@ -32,6 +32,78 @@ export const signupInput = credentials.extend({
   school: z.string().trim().max(160).optional(),
 });
 
+// --- Onboarding -----------------------------------------------------------
+// The one-time wizard a teacher completes after signup. Each step's fields are
+// grouped below so the client can validate a step on its own; `onboardingInput`
+// is what the finished wizard posts.
+
+/**
+ * The 17 DepEd regions, keyed by the code the client shows in its dropdown.
+ * Kept as an enum rather than free text so reports can group by region without
+ * first having to reconcile "Region 4A", "IV-A" and "CALABARZON".
+ */
+export const region = z.enum([
+  "NCR",
+  "CAR",
+  "I",
+  "II",
+  "III",
+  "IV-A",
+  "MIMAROPA",
+  "V",
+  "VI",
+  "VII",
+  "VIII",
+  "IX",
+  "X",
+  "XI",
+  "XII",
+  "XIII",
+  "BARMM",
+]);
+
+/**
+ * Grade levels as codes, not numbers: Kinder has no grade number, and a
+ * teacher's own level is a label rather than the integer `sections.gradeLevel`
+ * feeds into the weight profile.
+ */
+export const gradeLevel = z.enum([
+  "k1",
+  "k2",
+  "g1",
+  "g2",
+  "g3",
+  "g4",
+  "g5",
+  "g6",
+  "g7",
+  "g8",
+  "g9",
+  "g10",
+  "g11",
+  "g12",
+]);
+
+/** A class adviser owns one section; a subject teacher teaches across several. */
+export const teacherRole = z.enum(["class_adviser", "subject_teacher"]);
+
+/** Step 1 — where the teacher teaches. */
+export const schoolProfile = z.object({
+  region,
+  division: z.string().trim().min(1, "Enter your division").max(120),
+  // DepEd school IDs are six digits, but the older ones are shorter and a few
+  // annexes carry a letter, so this stays a length check rather than a format.
+  schoolId: z.string().trim().min(1, "Enter your school ID").max(20),
+  schoolName: z.string().trim().min(1, "Enter your school name").max(160),
+  schoolYear: z.string().regex(/^\d{4}-\d{4}$/, "Use the form 2026-2027"),
+  schoolHead: z.string().trim().min(1, "Enter your school head").max(120),
+});
+
+export const onboardingInput = schoolProfile.extend({
+  role: teacherRole,
+  gradeLevel,
+});
+
 export const sectionInput = z.object({
   name: z.string().trim().min(1).max(80),
   gradeLevel: z.coerce.number().int().min(1).max(12),

@@ -1,5 +1,7 @@
+import type { z } from "zod";
 import type { Database } from "./db/database";
 import type { WeightProfile } from "./lib/grading";
+import type { gradeLevel, onboardingInput, region, teacherRole } from "./schema";
 
 export type Bindings = {
   DB: Database;
@@ -20,14 +22,42 @@ export type Env = { Bindings: Bindings; Variables: Variables };
 // What route handlers and the frontend deal in. The database's own row shapes
 // live in src/db/mappers.ts and never escape that directory.
 
-export type Teacher = {
+/** One of the 17 DepEd regions. See `region` in schema.ts for the codes. */
+export type Region = z.infer<typeof region>;
+
+/** "k1" | "k2" | "g1" .. "g12" — Kinder has no grade number. */
+export type GradeLevel = z.infer<typeof gradeLevel>;
+
+export type TeacherRole = z.infer<typeof teacherRole>;
+
+/**
+ * Everything the onboarding wizard collects. Null throughout until the teacher
+ * finishes it, which is what `onboardedAt` records.
+ */
+export type TeacherProfile = {
+  region: Region | null;
+  division: string | null;
+  schoolId: string | null;
+  /** The school's name. Stored in `teachers.school`. */
+  school: string | null;
+  schoolYear: string | null;
+  schoolHead: string | null;
+  role: TeacherRole | null;
+  gradeLevel: GradeLevel | null;
+  /** Unix seconds the wizard was completed, or null while it is outstanding. */
+  onboardedAt: number | null;
+};
+
+/** What the finished onboarding wizard posts. */
+export type OnboardingInput = z.infer<typeof onboardingInput>;
+
+export type Teacher = TeacherProfile & {
   id: string;
   email: string;
   /** Not collected at signup, so absent until the teacher fills in a profile. */
   fullName: string | null;
   /** E.164 Philippine mobile number, e.g. "+639171234567". */
   contactNumber: string | null;
-  school: string | null;
 };
 
 export type Section = {

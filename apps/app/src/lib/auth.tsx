@@ -1,6 +1,7 @@
 import { createContext, use, useCallback, useEffect, useState, type ReactNode } from "react";
 import { api, ApiError } from "@/lib/api";
 import type { Teacher } from "@/lib/types";
+import type { OnboardingValues } from "@/lib/validation";
 
 export type SignupInput = {
   email: string;
@@ -17,6 +18,8 @@ type AuthState = {
   login: (email: string, password: string) => Promise<void>;
   signup: (input: SignupInput) => Promise<void>;
   logout: () => Promise<void>;
+  /** Saves the onboarding wizard and refreshes the teacher in context. */
+  completeOnboarding: (input: OnboardingValues) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -53,7 +56,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTeacher(null);
   }, []);
 
-  return <AuthContext value={{ teacher, loading, login, signup, logout }}>{children}</AuthContext>;
+  // The response carries the updated teacher, including `onboardedAt`, so the
+  // gate in RequireAuth flips in the same render that the wizard finishes —
+  // no refetch, and no window where the app would bounce back to /onboarding.
+  const completeOnboarding = useCallback(async (input: OnboardingValues) => {
+    const r = await api.post<{ teacher: Teacher }>("/onboarding", input);
+    setTeacher(r.teacher);
+  }, []);
+
+  return (
+    <AuthContext value={{ teacher, loading, login, signup, logout, completeOnboarding }}>
+      {children}
+    </AuthContext>
+  );
 }
 
 export function useAuth() {

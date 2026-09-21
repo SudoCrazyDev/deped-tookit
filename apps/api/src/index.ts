@@ -6,6 +6,7 @@ import { HTTPException } from "hono/http-exception";
 import type { Env } from "./types";
 import { auth } from "./routes/auth";
 import { sections } from "./routes/sections";
+import { onboarding } from "./routes/onboarding";
 import { assessments } from "./routes/assessments";
 import { grades } from "./routes/grades";
 
@@ -27,6 +28,7 @@ app.use("*", (c, next) =>
 app.get("/health", (c) => c.json({ ok: true }));
 
 app.route("/auth", auth);
+app.route("/onboarding", onboarding);
 app.route("/sections", sections);
 app.route("/", assessments);
 app.route("/", grades);

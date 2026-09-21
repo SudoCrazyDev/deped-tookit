@@ -6,7 +6,16 @@
  * `created_at` becomes a `timestamptz` instead of an epoch integer, only this
  * file and the queries that select it need to know.
  */
-import type { Assessment, Section, SectionWithCount, Student, Teacher } from "../types";
+import type {
+  Assessment,
+  GradeLevel,
+  Region,
+  Section,
+  SectionWithCount,
+  Student,
+  Teacher,
+  TeacherRole,
+} from "../types";
 import type { WeightProfile } from "../lib/grading";
 
 export type TeacherRow = {
@@ -15,7 +24,39 @@ export type TeacherRow = {
   full_name: string | null;
   contact_number: string | null;
   school: string | null;
+  region: Region | null;
+  division: string | null;
+  school_id: string | null;
+  school_year: string | null;
+  school_head: string | null;
+  teacher_role: TeacherRole | null;
+  grade_level: GradeLevel | null;
+  onboarded_at: number | null;
 };
+
+/**
+ * The teacher columns every read selects. Kept in one place so adding a column
+ * to the profile does not mean hunting down each SELECT that has to list it.
+ * `t` is the alias in queries that join; pass "" where the table is unaliased.
+ */
+export const teacherColumns = (t = "") =>
+  [
+    "id",
+    "email",
+    "full_name",
+    "contact_number",
+    "school",
+    "region",
+    "division",
+    "school_id",
+    "school_year",
+    "school_head",
+    "teacher_role",
+    "grade_level",
+    "onboarded_at",
+  ]
+    .map((c) => (t ? `${t}.${c}` : c))
+    .join(", ");
 
 export type TeacherWithHashRow = TeacherRow & { password_hash: string };
 
@@ -55,6 +96,14 @@ export const toTeacher = (r: TeacherRow): Teacher => ({
   fullName: r.full_name,
   contactNumber: r.contact_number,
   school: r.school,
+  region: r.region,
+  division: r.division,
+  schoolId: r.school_id,
+  schoolYear: r.school_year,
+  schoolHead: r.school_head,
+  role: r.teacher_role,
+  gradeLevel: r.grade_level,
+  onboardedAt: r.onboarded_at,
 });
 
 export const toSection = (r: SectionRow): Section => ({

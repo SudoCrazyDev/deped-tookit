@@ -2,6 +2,38 @@
 // Swap this for Hono's RPC client (`hono/client` + `typeof app`) if you want
 // these generated from the backend instead of hand-kept.
 
+/** One of the 17 DepEd regions. Labels for these live in lib/deped.ts. */
+export type Region =
+  | "NCR"
+  | "CAR"
+  | "I"
+  | "II"
+  | "III"
+  | "IV-A"
+  | "MIMAROPA"
+  | "V"
+  | "VI"
+  | "VII"
+  | "VIII"
+  | "IX"
+  | "X"
+  | "XI"
+  | "XII"
+  | "XIII"
+  | "BARMM";
+
+/**
+ * A grade level as a code rather than a number, because Kinder has none.
+ * Distinct from `Section.gradeLevel`, which is the integer 1-12 the weight
+ * profile is chosen against.
+ */
+export type GradeLevel =
+  | "k1"
+  | "k2"
+  | `g${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12}`;
+
+export type TeacherRole = "class_adviser" | "subject_teacher";
+
 export type Teacher = {
   id: string;
   email: string;
@@ -9,7 +41,19 @@ export type Teacher = {
   fullName: string | null;
   /** E.164 Philippine mobile number, e.g. "+639171234567". */
   contactNumber: string | null;
+  /** The school's name, from onboarding. */
   school: string | null;
+
+  // --- Onboarding. All null until the wizard is finished. ---
+  region: Region | null;
+  division: string | null;
+  schoolId: string | null;
+  schoolYear: string | null;
+  schoolHead: string | null;
+  role: TeacherRole | null;
+  gradeLevel: GradeLevel | null;
+  /** Unix seconds. Null means the teacher still owes us the wizard. */
+  onboardedAt: number | null;
 };
 
 export type Section = {

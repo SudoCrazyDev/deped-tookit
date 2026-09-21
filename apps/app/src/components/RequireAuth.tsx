@@ -24,6 +24,14 @@ export function RequireAuth() {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
+  // Setup is the app's first screen, not an optional detour: the school header
+  // and the grade level it collects are what every class record is printed
+  // with. `onboardedAt` is only set once the wizard is finished, so a teacher
+  // who abandoned it halfway lands back here.
+  if (!teacher.onboardedAt) {
+    return <Navigate to="/onboarding" replace />;
+  }
+
   return (
     <AppShell>
       <PageTransition>
