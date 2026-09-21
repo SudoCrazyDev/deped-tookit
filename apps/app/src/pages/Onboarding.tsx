@@ -5,25 +5,19 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, ArrowRight, Check, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
-import type { GradeLevel } from "@/lib/types";
+import type { Teacher } from "@/lib/types";
 import {
   onboardingSchema,
-  onboardingStepFields,
+  ONBOARDING_STEP_FIELDS,
   type OnboardingValues,
 } from "@/lib/validation";
-import {
-  currentSchoolYear,
-  GRADE_GROUPS,
-  gradeLevelLabel,
-  REGIONS,
-  schoolYearOptions,
-} from "@/lib/deped";
+import { currentSchoolYear, gradeLevelLabel, REGIONS, schoolYearOptions } from "@/lib/deped";
 import { useShake } from "@/hooks/use-shake";
 import { DURATION, EASE, gsap, motionSafe, useGSAP } from "@/lib/motion";
 import { OnboardingLayout } from "@/components/onboarding/OnboardingLayout";
 import { StepPanel } from "@/components/onboarding/StepPanel";
 import { RoleChoice } from "@/components/onboarding/RoleChoice";
-import { AdvisoryList } from "@/components/onboarding/AdvisoryList";
+import { AssignmentList, BLANK_ASSIGNMENT } from "@/components/onboarding/AssignmentList";
 import { RosterUpload } from "@/components/onboarding/RosterUpload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,14 +33,12 @@ import {
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 
-const STEPS = ["School", "Your role", "Grade level", "Class list"];
+const STEPS = ["School", "Your role", "Classes", "Class list"];
 const LAST = STEPS.length - 1;
 
 /** Step 3 asks a different question of each role, so the rail says so too. */
@@ -64,10 +56,11 @@ const COPY = [
     title: "How do you teach?",
     subtitle: "Pick the one that fits this school year — you can change it later.",
   },
-  // Replaced for a class adviser — see `copy` below.
+  // Step 3's wording is chosen by role — see `copy` in the wizard below.
   {
-    title: "Which grade level do you handle?",
-    subtitle: "It sets the grading weights your classes start with.",
+    title: "Which classes do you handle?",
+    subtitle:
+      "Add every section you teach in. The same grade level twice is fine — name the sections differently.",
   },
   {
     title: "Bring in your class list",
@@ -76,21 +69,20 @@ const COPY = [
   },
 ];
 
-/**
- * The grade levels in one line, for the confirmation toast: an adviser's
- * sections, or the single level a floating teacher handles.
- */
-function levelSummary(values: OnboardingValues): string {
-  if (values.role === "class_adviser") {
-    return values.advisories
-      .map((a) => `${gradeLevelLabel(a.gradeLevel)} ${a.sectionName}`)
-      .join(", ");
-  }
-  return values.gradeLevel ? gradeLevelLabel(values.gradeLevel) : "";
-}
+const ADVISER_COPY = {
+  title: "Which class do you advise?",
+  subtitle: "Your advisory class for this school year.",
+};
 
 /** How long the celebration holds before the dashboard takes over. */
 const DONE_MS = 1500;
+
+/** The classes in one line, for the confirmation toast. */
+function classSummary(values: OnboardingValues): string {
+  return values.assignments
+    .map((a) => `${gradeLevelLabel(a.gradeLevel)} ${a.sectionName}`)
+    .join(", ");
+}
 
 function AllSet({ firstName }: { firstName: string }) {
   const scope = useRef<HTMLDivElement>(null);
@@ -140,16 +132,29 @@ function AllSet({ firstName }: { firstName: string }) {
 }
 
 /**
- * The four-step wizard a teacher walks once, straight after signing up.
+ * The wizard a teacher walks once, straight after signing up.
  *
- * All four steps share a single react-hook-form instance, and Continue
- * validates only the fields belonging to the step on screen
- * (ONBOARDING_STEP_FIELDS). Nothing is sent until the last step, so a teacher
- * who closes the tab halfway simply starts over rather than leaving a partial
- * profile the rest of the app has to allow for.
+ * Split in two so the form below can read the teacher on its very first
+ * render: `useForm` captures its defaults once, and a teacher still loading at
+ * that moment would leave the prefilled fields permanently blank.
  */
 export function Onboarding() {
-  const { teacher, loading, completeOnboarding } = useAuth();
+  const { teacher, loading } = useAuth();
+
+  if (loading) return null;
+  if (!teacher) return <Navigate to="/login" replace />;
+
+  return <Wizard key={teacher.id} teacher={teacher} />;
+}
+
+/**
+ * All four steps share a single react-hook-form instance. Continue validates
+ * only the fields belonging to the step on screen, and nothing is posted until
+ * the last one — a teacher who closes the tab halfway starts over rather than
+ * leaving a partial profile the rest of the app has to reason about.
+ */
+function Wizard({ teacher }: { teacher: Teacher }) {
+  const { completeOnboarding } = useAuth();
   const navigate = useNavigate();
 
   const [step, setStep] = useState(0);
@@ -168,17 +173,18 @@ export function Onboarding() {
     resolver: zodResolver(onboardingSchema),
     // Same rule as signup: validate a field once it has been left, then live.
     mode: "onTouched",
+    // Prefilled from whatever the teacher already has. Normally that is
+    // nothing, but one sent back here by a migration keeps their school
+    // details, and retyping them would be a poor thank-you.
     defaultValues: {
-      region: undefined,
-      division: "",
-      schoolId: "",
-      schoolName: "",
-      // Nearly always the right answer, and one fewer decision to make.
-      schoolYear: currentSchoolYear(),
-      schoolHead: "",
-      role: undefined,
-      gradeLevel: undefined,
-      advisories: [],
+      region: teacher.region ?? undefined,
+      division: teacher.division ?? "",
+      schoolId: teacher.schoolId ?? "",
+      schoolName: teacher.school ?? "",
+      schoolYear: teacher.schoolYear ?? currentSchoolYear(),
+      schoolHead: teacher.schoolHead ?? "",
+      role: teacher.role ?? undefined,
+      assignments: [{ ...BLANK_ASSIGNMENT }],
     },
   });
 
@@ -188,13 +194,10 @@ export function Onboarding() {
     return () => clearTimeout(timer);
   }, [finished, navigate]);
 
-  if (loading) return null;
-  if (!teacher) return <Navigate to="/login" replace />;
   if (teacher.onboardedAt && !finishing.current) return <Navigate to="/" replace />;
 
   async function goNext() {
-    const fields = onboardingStepFields(step, form.getValues("role"));
-    const valid = await form.trigger(fields, { shouldFocus: true });
+    const valid = await form.trigger(ONBOARDING_STEP_FIELDS[step], { shouldFocus: true });
     if (!valid) return;
 
     setFormError(null);
@@ -216,7 +219,7 @@ export function Onboarding() {
       await completeOnboarding(values);
       setFinished(true);
       toast.success("School details saved", {
-        description: `${values.schoolName} · ${levelSummary(values)}`,
+        description: `${values.schoolName} · ${classSummary(values)}`,
       });
     } catch (err) {
       finishing.current = false;
@@ -244,38 +247,24 @@ export function Onboarding() {
   }
 
   /**
-   * Picking a role decides which question step 3 asks, so it also prepares
-   * that step: an adviser gets an empty advisory row to fill in, a floating
-   * teacher gets a single grade level. The branch not taken is cleared, so
-   * changing your mind here cannot leave the old answer behind for the
-   * server to reject.
+   * Picking a role decides how many classes step 3 accepts. Going from
+   * floating teacher to class adviser keeps the first row and drops the rest,
+   * rather than clearing the lot — the first one is usually the advisory they
+   * would only have typed again.
    */
   function onRoleChange(role: OnboardingValues["role"]) {
     answer("role")(role);
 
-    if (role === "class_adviser") {
-      form.setValue("gradeLevel", undefined);
-      if (form.getValues("advisories").length === 0) {
-        form.setValue("advisories", [{ gradeLevel: undefined as never, sectionName: "" }]);
-      }
-    } else {
-      form.setValue("advisories", []);
+    const current = form.getValues("assignments");
+    if (role === "class_adviser" && current.length > 1) {
+      form.setValue("assignments", [current[0]]);
     }
   }
 
   const role = form.watch("role");
   const adviser = role === "class_adviser";
-
   const steps = stepLabels(adviser);
-
-  const copy =
-    step === 2 && adviser
-      ? {
-          title: "Which classes do you advise?",
-          subtitle:
-            "Add each section you handle. The same grade level twice is fine — name the sections differently.",
-        }
-      : COPY[step];
+  const copy = step === 2 && adviser ? ADVISER_COPY : COPY[step];
 
   const submitting = form.formState.isSubmitting;
   const firstName = teacher.fullName?.split(" ")[0] ?? "";
@@ -509,44 +498,7 @@ export function Onboarding() {
               />
             )}
 
-            {step === 2 && adviser && <AdvisoryList />}
-
-            {step === 2 && !adviser && (
-              <FormField
-                control={form.control}
-                name="gradeLevel"
-                render={({ field }) => (
-                  <FormItem data-step-item className="max-w-sm">
-                    <FormLabel>Grade level</FormLabel>
-                    <Select
-                      value={field.value}
-                      // Radix hands back a plain string; the options are built
-                      // from GRADE_GROUPS, so it is always a grade code.
-                      onValueChange={(value) => answer("gradeLevel")(value as GradeLevel)}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Choose a grade level" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {GRADE_GROUPS.map((group) => (
-                          <SelectGroup key={group.label}>
-                            <SelectLabel>{group.label}</SelectLabel>
-                            {group.options.map((option) => (
-                              <SelectItem key={option.code} value={option.code}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
+            {step === 2 && <AssignmentList multiple={!adviser} />}
 
             {step === LAST && <RosterUpload file={roster} onChange={setRoster} />}
 

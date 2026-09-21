@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import type { Advisory } from "@/lib/types";
+import type { Assignment } from "@/lib/types";
 import { useAuth } from "@/lib/auth";
 import { formatSubscriber } from "@/lib/phone";
 import { gradeLevelLabel, regionLabel, teacherRoleLabel } from "@/lib/deped";
@@ -74,16 +74,18 @@ export function Profile() {
   const { teacher } = useAuth();
   const adviser = teacher?.role === "class_adviser";
 
-  // Advisories are a list, so they are not carried on the teacher object that
-  // every authenticated request already loads — this is the one screen that
-  // wants them. Only a class adviser has any.
+  // The classes a teacher handles are a list, so they are not carried on the
+  // teacher object that every authenticated request already loads — this is
+  // the one screen that wants them.
   const { data, isPending } = useQuery({
-    queryKey: ["advisories"],
-    queryFn: () => api.get<{ advisories: Advisory[] }>("/onboarding/advisories"),
-    enabled: adviser,
+    queryKey: ["assignments"],
+    queryFn: () => api.get<{ assignments: Assignment[] }>("/onboarding/assignments"),
+    enabled: Boolean(teacher?.onboardedAt),
   });
 
   if (!teacher) return null;
+
+  const classes = data?.assignments ?? [];
 
   const contact = teacher.contactNumber
     ? `+63 ${formatSubscriber(teacher.contactNumber.replace(/^\+63/, ""))}`
@@ -157,39 +159,28 @@ export function Profile() {
               )
             }
           />
-          {adviser ? (
-            <div className="min-w-0 sm:col-span-2">
-              <dt className="text-xs text-muted-foreground">
-                Advisory {data && data.advisories.length === 1 ? "class" : "classes"}
-              </dt>
-              <dd className="mt-1.5 flex flex-wrap gap-1.5">
-                {isPending ? (
-                  <Skeleton className="h-5.5 w-32 rounded-md" />
-                ) : data?.advisories.length ? (
-                  data.advisories.map((a) => (
-                    <Badge
-                      key={`${a.gradeLevel}/${a.sectionName}`}
-                      variant="outline"
-                      className="font-medium"
-                    >
-                      {gradeLevelLabel(a.gradeLevel)} &middot; {a.sectionName}
-                    </Badge>
-                  ))
-                ) : (
-                  <span className="text-sm text-muted-foreground">—</span>
-                )}
-              </dd>
-            </div>
-          ) : (
-            <Field
-              label="Grade level"
-              value={
-                teacher.gradeLevel && (
-                  <Badge variant="outline">{gradeLevelLabel(teacher.gradeLevel)}</Badge>
-                )
-              }
-            />
-          )}
+          <div className="min-w-0 sm:col-span-2">
+            <dt className="text-xs text-muted-foreground">
+              {adviser ? "Advisory class" : "Classes handled"}
+            </dt>
+            <dd className="mt-1.5 flex flex-wrap gap-1.5">
+              {isPending ? (
+                <Skeleton className="h-5.5 w-32 rounded-md" />
+              ) : classes.length ? (
+                classes.map((c) => (
+                  <Badge
+                    key={`${c.gradeLevel}/${c.sectionName}`}
+                    variant="outline"
+                    className="font-medium"
+                  >
+                    {gradeLevelLabel(c.gradeLevel)} &middot; {c.sectionName}
+                  </Badge>
+                ))
+              ) : (
+                <span className="text-sm text-muted-foreground">—</span>
+              )}
+            </dd>
+          </div>
         </Section>
 
         <p className="flex items-start gap-2 rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">

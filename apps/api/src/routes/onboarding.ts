@@ -9,10 +9,10 @@ import { teachers as teachersDb, UniqueViolationError } from "../db";
 export const onboarding = new Hono<Env>();
 onboarding.use("*", requireAuth);
 
-/** The teacher's advisory classes. Empty for a floating teacher. */
-onboarding.get("/advisories", async (c) => {
-  const advisories = await teachersDb.listAdvisories(c.env.DB, c.get("teacher").id);
-  return c.json({ advisories });
+/** The classes a teacher handles: one for an adviser, several for a floater. */
+onboarding.get("/assignments", async (c) => {
+  const assignments = await teachersDb.listAssignments(c.env.DB, c.get("teacher").id);
+  return c.json({ assignments });
 });
 
 /**

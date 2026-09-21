@@ -2,7 +2,7 @@ import type { z } from "zod";
 import type { Database } from "./db/database";
 import type { WeightProfile } from "./lib/grading";
 import type {
-  advisory,
+  assignment,
   gradeLevel,
   onboardingInput,
   region,
@@ -36,8 +36,11 @@ export type GradeLevel = z.infer<typeof gradeLevel>;
 
 export type TeacherRole = z.infer<typeof teacherRole>;
 
-/** One advisory class. Class advisers have at least one; floating teachers none. */
-export type Advisory = z.infer<typeof advisory>;
+/**
+ * One class a teacher handles. An adviser has exactly one — their advisory —
+ * and a floating teacher has one row per section they teach in.
+ */
+export type Assignment = z.infer<typeof assignment>;
 
 /**
  * Everything the onboarding wizard collects. Null throughout until the teacher
@@ -52,11 +55,6 @@ export type TeacherProfile = {
   schoolYear: string | null;
   schoolHead: string | null;
   role: TeacherRole | null;
-  /**
-   * The single level a floating teacher handles. Null for a class adviser,
-   * whose levels live on their advisories instead.
-   */
-  gradeLevel: GradeLevel | null;
   /** Unix seconds the wizard was completed, or null while it is outstanding. */
   onboardedAt: number | null;
 };

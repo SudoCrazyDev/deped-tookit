@@ -34,8 +34,11 @@ export type GradeLevel =
 
 export type TeacherRole = "class_adviser" | "floating_teacher";
 
-/** One advisory class. Class advisers have at least one; floating teachers none. */
-export type Advisory = {
+/**
+ * One class a teacher handles. An adviser has exactly one — their advisory —
+ * and a floating teacher has one row per section they teach in.
+ */
+export type Assignment = {
   gradeLevel: GradeLevel;
   sectionName: string;
 };
@@ -57,11 +60,6 @@ export type Teacher = {
   schoolYear: string | null;
   schoolHead: string | null;
   role: TeacherRole | null;
-  /**
-   * The single level a floating teacher handles. Null for a class adviser,
-   * whose levels live on their advisories — fetched separately.
-   */
-  gradeLevel: GradeLevel | null;
   /** Unix seconds. Null means the teacher still owes us the wizard. */
   onboardedAt: number | null;
 };

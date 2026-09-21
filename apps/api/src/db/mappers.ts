@@ -7,8 +7,8 @@
  * file and the queries that select it need to know.
  */
 import type {
-  Advisory,
   Assessment,
+  Assignment,
   GradeLevel,
   Region,
   Section,
@@ -31,7 +31,6 @@ export type TeacherRow = {
   school_year: string | null;
   school_head: string | null;
   teacher_role: TeacherRole | null;
-  grade_level: GradeLevel | null;
   onboarded_at: number | null;
 };
 
@@ -53,7 +52,6 @@ export const teacherColumns = (t = "") =>
     "school_year",
     "school_head",
     "teacher_role",
-    "grade_level",
     "onboarded_at",
   ]
     .map((c) => (t ? `${t}.${c}` : c))
@@ -61,12 +59,12 @@ export const teacherColumns = (t = "") =>
 
 export type TeacherWithHashRow = TeacherRow & { password_hash: string };
 
-export type AdvisoryRow = {
+export type AssignmentRow = {
   grade_level: GradeLevel;
   section_name: string;
 };
 
-export const toAdvisory = (r: AdvisoryRow): Advisory => ({
+export const toAssignment = (r: AssignmentRow): Assignment => ({
   gradeLevel: r.grade_level,
   sectionName: r.section_name,
 });
@@ -113,7 +111,6 @@ export const toTeacher = (r: TeacherRow): Teacher => ({
   schoolYear: r.school_year,
   schoolHead: r.school_head,
   role: r.teacher_role,
-  gradeLevel: r.grade_level,
   onboardedAt: r.onboarded_at,
 });
 

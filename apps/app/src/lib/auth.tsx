@@ -67,9 +67,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (input: OnboardingValues) => {
       const r = await api.post<{ teacher: Teacher }>("/onboarding", input);
       setTeacher(r.teacher);
-      // The advisory list is fetched separately by the profile page, so it
-      // has to be told the answer changed.
-      await queryClient.invalidateQueries({ queryKey: ["advisories"] });
+      // The class list is fetched separately by the profile page, so it has
+      // to be told the answer changed.
+      await queryClient.invalidateQueries({ queryKey: ["assignments"] });
     },
     [queryClient],
   );
@@ -80,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const resetOnboarding = useCallback(async () => {
     const r = await api.del<{ teacher: Teacher }>("/onboarding");
     setTeacher(r.teacher);
-    await queryClient.invalidateQueries({ queryKey: ["advisories"] });
+    await queryClient.invalidateQueries({ queryKey: ["assignments"] });
   }, [queryClient]);
 
   return (

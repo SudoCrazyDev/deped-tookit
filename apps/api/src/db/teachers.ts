@@ -1,10 +1,10 @@
 import type { Database } from "./database";
-import type { Advisory, OnboardingInput, Teacher } from "../types";
+import type { Assignment, OnboardingInput, Teacher } from "../types";
 import {
   teacherColumns,
-  toAdvisory,
+  toAssignment,
   toTeacher,
-  type AdvisoryRow,
+  type AssignmentRow,
   type TeacherRow,
   type TeacherWithHashRow,
 } from "./mappers";
@@ -54,7 +54,6 @@ export async function create(
     schoolYear: null,
     schoolHead: null,
     role: null,
-    gradeLevel: null,
     onboardedAt: null,
   };
 }
@@ -70,21 +69,13 @@ export async function completeOnboarding(
   teacherId: string,
   input: OnboardingInput,
 ): Promise<Teacher | null> {
-  const adviser = input.role === "class_adviser";
-
-  // The two halves of the role answer are stored where they belong and the
-  // other is emptied, so a teacher who switches role on the way through the
-  // wizard cannot leave the previous answer behind.
-  const advisories = adviser ? input.advisories : [];
-  const gradeLevel = adviser ? null : (input.gradeLevel ?? null);
-
   const statements = [
     db
       .prepare(
         `UPDATE teachers
             SET region = ?, division = ?, school_id = ?, school = ?,
                 school_year = ?, school_head = ?, teacher_role = ?,
-                grade_level = ?, onboarded_at = unixepoch()
+                onboarded_at = unixepoch()
           WHERE id = ?`,
       )
       .bind(
@@ -95,16 +86,16 @@ export async function completeOnboarding(
         input.schoolYear,
         input.schoolHead,
         input.role,
-        gradeLevel,
         teacherId,
       ),
     // Replace rather than merge: the wizard always posts the whole list, so
-    // anything not in it was removed by the teacher.
-    db.prepare("DELETE FROM teacher_advisories WHERE teacher_id = ?").bind(teacherId),
-    ...advisories.map((a, position) =>
+    // anything not in it was removed by the teacher. This is also what keeps
+    // a role change from leaving the previous role's rows behind.
+    db.prepare("DELETE FROM teacher_assignments WHERE teacher_id = ?").bind(teacherId),
+    ...input.assignments.map((a, position) =>
       db
         .prepare(
-          `INSERT INTO teacher_advisories
+          `INSERT INTO teacher_assignments
              (id, teacher_id, grade_level, section_name, position)
            VALUES (?, ?, ?, ?, ?)`,
         )
@@ -112,27 +103,30 @@ export async function completeOnboarding(
     ),
   ];
 
-  await rethrowAsUniqueViolation("teacher_advisories.section", () => db.batch(statements));
+  await rethrowAsUniqueViolation("teacher_assignments.section", () => db.batch(statements));
 
   return findById(db, teacherId);
 }
 
-/** The advisory classes a teacher entered, in the order they entered them. */
-export async function listAdvisories(
+/**
+ * The classes a teacher handles, in the order they entered them: one row for
+ * a class adviser, one per section for a floating teacher.
+ */
+export async function listAssignments(
   db: Database,
   teacherId: string,
-): Promise<Advisory[]> {
+): Promise<Assignment[]> {
   const { results } = await db
     .prepare(
       `SELECT grade_level, section_name
-         FROM teacher_advisories
+         FROM teacher_assignments
         WHERE teacher_id = ?
         ORDER BY position`,
     )
     .bind(teacherId)
-    .all<AdvisoryRow>();
+    .all<AssignmentRow>();
 
-  return results.map(toAdvisory);
+  return results.map(toAssignment);
 }
 
 async function findById(db: Database, teacherId: string): Promise<Teacher | null> {
@@ -148,9 +142,10 @@ async function findById(db: Database, teacherId: string): Promise<Teacher | null
  * Clears the onboarding answers and sends the teacher back to the wizard.
  *
  * Every column the wizard owns is nulled, `school` included — it is the school
- * name the wizard collects, not something the teacher set elsewhere. Nulling
- * `onboarded_at` is what RequireAuth reads, so the redirect happens on the
- * next render without anything else having to know a reset took place.
+ * name the wizard collects, not something the teacher set elsewhere — and the
+ * assignment rows go with them. Nulling `onboarded_at` is what RequireAuth
+ * reads, so the redirect happens on the next render without anything else
+ * having to know a reset took place.
  */
 export async function resetOnboarding(
   db: Database,
@@ -162,11 +157,11 @@ export async function resetOnboarding(
         `UPDATE teachers
             SET region = NULL, division = NULL, school_id = NULL, school = NULL,
                 school_year = NULL, school_head = NULL, teacher_role = NULL,
-                grade_level = NULL, onboarded_at = NULL
+                onboarded_at = NULL
           WHERE id = ?`,
       )
       .bind(teacherId),
-    db.prepare("DELETE FROM teacher_advisories WHERE teacher_id = ?").bind(teacherId),
+    db.prepare("DELETE FROM teacher_assignments WHERE teacher_id = ?").bind(teacherId),
   ]);
 
   return findById(db, teacherId);

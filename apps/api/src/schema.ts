@@ -85,16 +85,19 @@ export const gradeLevel = z.enum([
 ]);
 
 /**
- * A class adviser holds one or more advisory sections; a floating teacher has
+ * A class adviser holds exactly one advisory section; a floating teacher has
  * no advisory and teaches several subjects across other people's sections.
  */
 export const teacherRole = z.enum(["class_adviser", "floating_teacher"]);
 
-/** One advisory class: a grade level and the section's name. */
-export const advisory = z.object({
+/** One class a teacher handles: a grade level and the section's name. */
+export const assignment = z.object({
   gradeLevel,
   sectionName: z.string().trim().min(1, "Enter the section name").max(80),
 });
+
+/** A floating teacher's ceiling. An adviser is held to one by the refinement. */
+export const MAX_ASSIGNMENTS = 20;
 
 /** Step 1 — where the teacher teaches. */
 export const schoolProfile = z.object({
@@ -111,51 +114,43 @@ export const schoolProfile = z.object({
 /**
  * The finished wizard.
  *
- * `gradeLevel` and `advisories` are the two halves of one answer and which of
- * them is required depends on `role`, so both are optional in the shape and
- * the refinement below decides. A discriminated union would say the same
- * thing, but this keeps one flat object for the client form to bind to and
- * one flat object for the route handler to read.
+ * Both roles answer step 3 with the same shape — a grade level and a section
+ * name — and differ only in how many they may give. A class adviser has one
+ * advisory, which is what the word means; a floating teacher has no advisory
+ * and lists every section they teach in.
  */
 export const onboardingInput = schoolProfile
   .extend({
     role: teacherRole,
-    /** Floating teachers only — the single level they handle. */
-    gradeLevel: gradeLevel.optional(),
-    /** Class advisers only, at least one. */
-    advisories: z.array(advisory).max(20).default([]),
+    assignments: z
+      .array(assignment)
+      .min(1, "Add the class you handle")
+      .max(MAX_ASSIGNMENTS),
   })
   .superRefine((value, ctx) => {
-    if (value.role === "class_adviser") {
-      if (value.advisories.length === 0) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["advisories"],
-          message: "Add at least one advisory class",
-        });
-      }
-
-      // A repeated grade level is expected; the same section twice is a slip,
-      // and the unique index would reject it as a 500 rather than a message.
-      const seen = new Set<string>();
-      value.advisories.forEach((a, i) => {
-        const key = `${a.gradeLevel}/${a.sectionName.toLowerCase()}`;
-        if (seen.has(key)) {
-          ctx.addIssue({
-            code: "custom",
-            path: ["advisories", i, "sectionName"],
-            message: "You have already added this section",
-          });
-        }
-        seen.add(key);
-      });
-    } else if (!value.gradeLevel) {
+    if (value.role === "class_adviser" && value.assignments.length > 1) {
       ctx.addIssue({
         code: "custom",
-        path: ["gradeLevel"],
-        message: "Choose the grade level you handle",
+        path: ["assignments"],
+        message: "A class adviser has one advisory class",
       });
     }
+
+    // A repeated grade level is expected — that is why the section name is
+    // asked for — but the same section twice is a slip, and the unique index
+    // would reject it as a 500 rather than a message.
+    const seen = new Set<string>();
+    value.assignments.forEach((a, i) => {
+      const key = `${a.gradeLevel}/${a.sectionName.toLowerCase()}`;
+      if (seen.has(key)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["assignments", i, "sectionName"],
+          message: "You have already added this section",
+        });
+      }
+      seen.add(key);
+    });
   });
 
 export const sectionInput = z.object({
