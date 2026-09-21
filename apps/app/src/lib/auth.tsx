@@ -1,4 +1,5 @@
 import { createContext, use, useCallback, useEffect, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "@/lib/api";
 import type { Teacher } from "@/lib/types";
 import type { OnboardingValues } from "@/lib/validation";
@@ -20,6 +21,8 @@ type AuthState = {
   logout: () => Promise<void>;
   /** Saves the onboarding wizard and refreshes the teacher in context. */
   completeOnboarding: (input: OnboardingValues) => Promise<void>;
+  /** Clears the onboarding answers, which sends the teacher back to the wizard. */
+  resetOnboarding: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -27,6 +30,7 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [teacher, setTeacher] = useState<Teacher | null>(null);
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     api
@@ -59,13 +63,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // The response carries the updated teacher, including `onboardedAt`, so the
   // gate in RequireAuth flips in the same render that the wizard finishes —
   // no refetch, and no window where the app would bounce back to /onboarding.
-  const completeOnboarding = useCallback(async (input: OnboardingValues) => {
-    const r = await api.post<{ teacher: Teacher }>("/onboarding", input);
+  const completeOnboarding = useCallback(
+    async (input: OnboardingValues) => {
+      const r = await api.post<{ teacher: Teacher }>("/onboarding", input);
+      setTeacher(r.teacher);
+      // The advisory list is fetched separately by the profile page, so it
+      // has to be told the answer changed.
+      await queryClient.invalidateQueries({ queryKey: ["advisories"] });
+    },
+    [queryClient],
+  );
+
+  // Same shape as completing it: the response carries the cleared teacher, so
+  // RequireAuth sees the null `onboardedAt` on the very next render and moves
+  // the teacher to the wizard without a refetch.
+  const resetOnboarding = useCallback(async () => {
+    const r = await api.del<{ teacher: Teacher }>("/onboarding");
     setTeacher(r.teacher);
-  }, []);
+    await queryClient.invalidateQueries({ queryKey: ["advisories"] });
+  }, [queryClient]);
 
   return (
-    <AuthContext value={{ teacher, loading, login, signup, logout, completeOnboarding }}>
+    <AuthContext
+      value={{
+        teacher,
+        loading,
+        login,
+        signup,
+        logout,
+        completeOnboarding,
+        resetOnboarding,
+      }}
+    >
       {children}
     </AuthContext>
   );

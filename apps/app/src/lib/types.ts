@@ -32,7 +32,13 @@ export type GradeLevel =
   | "k2"
   | `g${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12}`;
 
-export type TeacherRole = "class_adviser" | "subject_teacher";
+export type TeacherRole = "class_adviser" | "floating_teacher";
+
+/** One advisory class. Class advisers have at least one; floating teachers none. */
+export type Advisory = {
+  gradeLevel: GradeLevel;
+  sectionName: string;
+};
 
 export type Teacher = {
   id: string;
@@ -51,6 +57,10 @@ export type Teacher = {
   schoolYear: string | null;
   schoolHead: string | null;
   role: TeacherRole | null;
+  /**
+   * The single level a floating teacher handles. Null for a class adviser,
+   * whose levels live on their advisories — fetched separately.
+   */
   gradeLevel: GradeLevel | null;
   /** Unix seconds. Null means the teacher still owes us the wizard. */
   onboardedAt: number | null;

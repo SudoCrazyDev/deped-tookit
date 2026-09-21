@@ -32,6 +32,11 @@ export const REGIONS: Array<{ code: Region; label: string }> = [
   { code: "BARMM", label: "BARMM — Bangsamoro" },
 ];
 
+const REGION_LABELS = new Map(REGIONS.map((r) => [r.code, r.label]));
+
+/** The long form of a stored region code, for reading back on the profile. */
+export const regionLabel = (code: Region) => REGION_LABELS.get(code) ?? code;
+
 export type GradeGroup = {
   label: string;
   options: Array<{ code: GradeLevel; label: string }>;
@@ -75,13 +80,13 @@ export const TEACHER_ROLES: Array<{
   {
     code: "class_adviser",
     title: "Class Adviser",
-    description:
-      "You handle one section and keep its class record across every subject.",
+    description: "You have an assigned Class Advisory.",
   },
   {
-    code: "subject_teacher",
-    title: "Subject Teacher",
-    description: "You teach one or more subjects across several sections.",
+    code: "floating_teacher",
+    title: "Floating Teacher",
+    description:
+      "You don't have an advisory, but you have multiple subjects assigned.",
   },
 ];
 
@@ -103,3 +108,7 @@ export function schoolYearOptions(now = new Date()): string[] {
 
 /** The option a teacher almost always wants, pre-selected. */
 export const currentSchoolYear = (now = new Date()) => schoolYearOptions(now)[1];
+
+const ROLE_TITLES = new Map(TEACHER_ROLES.map((r) => [r.code, r.title]));
+
+export const teacherRoleLabel = (code: TeacherRole) => ROLE_TITLES.get(code) ?? code;

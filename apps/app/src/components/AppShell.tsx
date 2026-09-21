@@ -1,6 +1,6 @@
-import { useRef, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
-import { LogOut, Phone, User } from "lucide-react";
+import { Loader2, LogOut, Phone, RotateCcw, User, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { formatSubscriber } from "@/lib/phone";
@@ -15,6 +15,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 /** Two letters for the avatar, from the name if there is one, else the email. */
@@ -24,8 +34,10 @@ function initials(from: string) {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { teacher, logout } = useAuth();
+  const { teacher, logout, resetOnboarding } = useAuth();
   const header = useRef<HTMLElement>(null);
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   useGSAP(
     () => {
@@ -50,6 +62,21 @@ export function AppShell({ children }: { children: ReactNode }) {
       toast.success("Signed out");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not sign out");
+    }
+  }
+
+  async function onResetOnboarding() {
+    setResetting(true);
+    try {
+      await resetOnboarding();
+      // No navigation here: clearing `onboardedAt` is enough, and RequireAuth
+      // moves the teacher to the wizard on the next render.
+      toast.success("Setup cleared", { description: "Let's go through it again." });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not reset your setup");
+    } finally {
+      setResetting(false);
+      setConfirmingReset(false);
     }
   }
 
@@ -101,7 +128,24 @@ export function AppShell({ children }: { children: ReactNode }) {
                 )}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => void onSignOut()}>
+
+              <DropdownMenuItem asChild>
+                <Link to="/profile">
+                  <UserRound className="size-4" />
+                  Profile
+                </Link>
+              </DropdownMenuItem>
+
+              {/* The dialog is driven by state rather than wrapped around this
+                  item: a trigger inside a menu is unmounted the moment the menu
+                  closes, which takes the dialog with it. */}
+              <DropdownMenuItem onSelect={() => setConfirmingReset(true)}>
+                <RotateCcw className="size-4" />
+                Reset onboarding
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onSelect={() => void onSignOut()}>
                 <LogOut className="size-4" />
                 Sign out
               </DropdownMenuItem>
@@ -109,6 +153,36 @@ export function AppShell({ children }: { children: ReactNode }) {
           </DropdownMenu>
         </div>
       </header>
+
+      <AlertDialog open={confirmingReset} onOpenChange={setConfirmingReset}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset your setup?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This clears your region, division, school, school year, school head,
+              role and grade level, and takes you back through setup. Your classes
+              and learners are not touched.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resetting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={resetting}
+              // Kept as a plain click: the default AlertDialogAction closes the
+              // dialog on select, which would hide the pending state and the
+              // error if the request fails.
+              onClick={(e) => {
+                e.preventDefault();
+                void onResetOnboarding();
+              }}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {resetting && <Loader2 className="animate-spin" />}
+              {resetting ? "Clearing…" : "Reset onboarding"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <main className="mx-auto max-w-5xl px-4 pt-8 pb-20 sm:px-6">{children}</main>
     </div>

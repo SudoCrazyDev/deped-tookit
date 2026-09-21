@@ -7,6 +7,7 @@
  * file and the queries that select it need to know.
  */
 import type {
+  Advisory,
   Assessment,
   GradeLevel,
   Region,
@@ -59,6 +60,16 @@ export const teacherColumns = (t = "") =>
     .join(", ");
 
 export type TeacherWithHashRow = TeacherRow & { password_hash: string };
+
+export type AdvisoryRow = {
+  grade_level: GradeLevel;
+  section_name: string;
+};
+
+export const toAdvisory = (r: AdvisoryRow): Advisory => ({
+  gradeLevel: r.grade_level,
+  sectionName: r.section_name,
+});
 
 export type SectionRow = {
   id: string;

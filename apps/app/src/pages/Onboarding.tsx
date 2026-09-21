@@ -5,9 +5,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, ArrowRight, Check, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
+import type { GradeLevel } from "@/lib/types";
 import {
   onboardingSchema,
-  ONBOARDING_STEP_FIELDS,
+  onboardingStepFields,
   type OnboardingValues,
 } from "@/lib/validation";
 import {
@@ -22,6 +23,7 @@ import { DURATION, EASE, gsap, motionSafe, useGSAP } from "@/lib/motion";
 import { OnboardingLayout } from "@/components/onboarding/OnboardingLayout";
 import { StepPanel } from "@/components/onboarding/StepPanel";
 import { RoleChoice } from "@/components/onboarding/RoleChoice";
+import { AdvisoryList } from "@/components/onboarding/AdvisoryList";
 import { RosterUpload } from "@/components/onboarding/RosterUpload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +49,12 @@ import {
 const STEPS = ["School", "Your role", "Grade level", "Class list"];
 const LAST = STEPS.length - 1;
 
+/** Step 3 asks a different question of each role, so the rail says so too. */
+function stepLabels(adviser: boolean) {
+  if (!adviser) return STEPS;
+  return STEPS.map((label, i) => (i === 2 ? "Advisory" : label));
+}
+
 const COPY = [
   {
     title: "Tell us about your school",
@@ -56,6 +64,7 @@ const COPY = [
     title: "How do you teach?",
     subtitle: "Pick the one that fits this school year — you can change it later.",
   },
+  // Replaced for a class adviser — see `copy` below.
   {
     title: "Which grade level do you handle?",
     subtitle: "It sets the grading weights your classes start with.",
@@ -66,6 +75,19 @@ const COPY = [
       "Have your learners in a spreadsheet? Add it here, or skip and type them in later.",
   },
 ];
+
+/**
+ * The grade levels in one line, for the confirmation toast: an adviser's
+ * sections, or the single level a floating teacher handles.
+ */
+function levelSummary(values: OnboardingValues): string {
+  if (values.role === "class_adviser") {
+    return values.advisories
+      .map((a) => `${gradeLevelLabel(a.gradeLevel)} ${a.sectionName}`)
+      .join(", ");
+  }
+  return values.gradeLevel ? gradeLevelLabel(values.gradeLevel) : "";
+}
 
 /** How long the celebration holds before the dashboard takes over. */
 const DONE_MS = 1500;
@@ -156,6 +178,7 @@ export function Onboarding() {
       schoolHead: "",
       role: undefined,
       gradeLevel: undefined,
+      advisories: [],
     },
   });
 
@@ -170,7 +193,8 @@ export function Onboarding() {
   if (teacher.onboardedAt && !finishing.current) return <Navigate to="/" replace />;
 
   async function goNext() {
-    const valid = await form.trigger(ONBOARDING_STEP_FIELDS[step], { shouldFocus: true });
+    const fields = onboardingStepFields(step, form.getValues("role"));
+    const valid = await form.trigger(fields, { shouldFocus: true });
     if (!valid) return;
 
     setFormError(null);
@@ -192,7 +216,7 @@ export function Onboarding() {
       await completeOnboarding(values);
       setFinished(true);
       toast.success("School details saved", {
-        description: `${values.schoolName} · ${gradeLevelLabel(values.gradeLevel)}`,
+        description: `${values.schoolName} · ${levelSummary(values)}`,
       });
     } catch (err) {
       finishing.current = false;
@@ -219,12 +243,46 @@ export function Onboarding() {
       form.setValue(name, value, { shouldValidate: true, shouldTouch: true });
   }
 
+  /**
+   * Picking a role decides which question step 3 asks, so it also prepares
+   * that step: an adviser gets an empty advisory row to fill in, a floating
+   * teacher gets a single grade level. The branch not taken is cleared, so
+   * changing your mind here cannot leave the old answer behind for the
+   * server to reject.
+   */
+  function onRoleChange(role: OnboardingValues["role"]) {
+    answer("role")(role);
+
+    if (role === "class_adviser") {
+      form.setValue("gradeLevel", undefined);
+      if (form.getValues("advisories").length === 0) {
+        form.setValue("advisories", [{ gradeLevel: undefined as never, sectionName: "" }]);
+      }
+    } else {
+      form.setValue("advisories", []);
+    }
+  }
+
+  const role = form.watch("role");
+  const adviser = role === "class_adviser";
+
+  const steps = stepLabels(adviser);
+
+  const copy =
+    step === 2 && adviser
+      ? {
+          title: "Which classes do you advise?",
+          subtitle:
+            "Add each section you handle. The same grade level twice is fine — name the sections differently.",
+        }
+      : COPY[step];
+
   const submitting = form.formState.isSubmitting;
   const firstName = teacher.fullName?.split(" ")[0] ?? "";
 
   if (finished) {
     return (
-      <OnboardingLayout steps={STEPS} current={LAST} footer={<span className="sr-only" />}>
+      <OnboardingLayout steps={steps} current={LAST} footer={<span className="sr-only" />}>
         <AllSet firstName={firstName} />
       </OnboardingLayout>
     );
@@ -232,7 +290,7 @@ export function Onboarding() {
 
   return (
     <OnboardingLayout
-      steps={STEPS}
+      steps={steps}
       current={step}
       footer={
         <div className="flex items-center justify-between gap-3">
@@ -294,8 +352,8 @@ export function Onboarding() {
           <StepPanel
             step={step}
             direction={direction}
-            title={COPY[step].title}
-            subtitle={COPY[step].subtitle}
+            title={copy.title}
+            subtitle={copy.subtitle}
           >
             {step === 0 && (
               <div className="grid items-start gap-4 sm:grid-cols-2">
@@ -442,7 +500,7 @@ export function Onboarding() {
                   <FormItem>
                     <RoleChoice
                       value={field.value}
-                      onChange={answer("role")}
+                      onChange={onRoleChange}
                       invalid={Boolean(fieldState.error)}
                     />
                     <FormMessage />
@@ -451,14 +509,21 @@ export function Onboarding() {
               />
             )}
 
-            {step === 2 && (
+            {step === 2 && adviser && <AdvisoryList />}
+
+            {step === 2 && !adviser && (
               <FormField
                 control={form.control}
                 name="gradeLevel"
                 render={({ field }) => (
                   <FormItem data-step-item className="max-w-sm">
                     <FormLabel>Grade level</FormLabel>
-                    <Select value={field.value} onValueChange={answer("gradeLevel")}>
+                    <Select
+                      value={field.value}
+                      // Radix hands back a plain string; the options are built
+                      // from GRADE_GROUPS, so it is always a grade code.
+                      onValueChange={(value) => answer("gradeLevel")(value as GradeLevel)}
+                    >
                       <FormControl>
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="Choose a grade level" />

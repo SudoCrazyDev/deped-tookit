@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 const ICONS: Record<TeacherRole, typeof Users> = {
   class_adviser: Users,
-  subject_teacher: BookMarked,
+  floating_teacher: BookMarked,
 };
 
 /**

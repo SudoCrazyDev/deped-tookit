@@ -84,8 +84,17 @@ export const gradeLevel = z.enum([
   "g12",
 ]);
 
-/** A class adviser owns one section; a subject teacher teaches across several. */
-export const teacherRole = z.enum(["class_adviser", "subject_teacher"]);
+/**
+ * A class adviser holds one or more advisory sections; a floating teacher has
+ * no advisory and teaches several subjects across other people's sections.
+ */
+export const teacherRole = z.enum(["class_adviser", "floating_teacher"]);
+
+/** One advisory class: a grade level and the section's name. */
+export const advisory = z.object({
+  gradeLevel,
+  sectionName: z.string().trim().min(1, "Enter the section name").max(80),
+});
 
 /** Step 1 — where the teacher teaches. */
 export const schoolProfile = z.object({
@@ -99,10 +108,55 @@ export const schoolProfile = z.object({
   schoolHead: z.string().trim().min(1, "Enter your school head").max(120),
 });
 
-export const onboardingInput = schoolProfile.extend({
-  role: teacherRole,
-  gradeLevel,
-});
+/**
+ * The finished wizard.
+ *
+ * `gradeLevel` and `advisories` are the two halves of one answer and which of
+ * them is required depends on `role`, so both are optional in the shape and
+ * the refinement below decides. A discriminated union would say the same
+ * thing, but this keeps one flat object for the client form to bind to and
+ * one flat object for the route handler to read.
+ */
+export const onboardingInput = schoolProfile
+  .extend({
+    role: teacherRole,
+    /** Floating teachers only — the single level they handle. */
+    gradeLevel: gradeLevel.optional(),
+    /** Class advisers only, at least one. */
+    advisories: z.array(advisory).max(20).default([]),
+  })
+  .superRefine((value, ctx) => {
+    if (value.role === "class_adviser") {
+      if (value.advisories.length === 0) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["advisories"],
+          message: "Add at least one advisory class",
+        });
+      }
+
+      // A repeated grade level is expected; the same section twice is a slip,
+      // and the unique index would reject it as a 500 rather than a message.
+      const seen = new Set<string>();
+      value.advisories.forEach((a, i) => {
+        const key = `${a.gradeLevel}/${a.sectionName.toLowerCase()}`;
+        if (seen.has(key)) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["advisories", i, "sectionName"],
+            message: "You have already added this section",
+          });
+        }
+        seen.add(key);
+      });
+    } else if (!value.gradeLevel) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["gradeLevel"],
+        message: "Choose the grade level you handle",
+      });
+    }
+  });
 
 export const sectionInput = z.object({
   name: z.string().trim().min(1).max(80),

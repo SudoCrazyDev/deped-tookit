@@ -8,6 +8,7 @@
  * problems.
  */
 import { z } from "zod";
+import type { FieldPath } from "react-hook-form";
 import { PH_SUBSCRIBER } from "./phone";
 import { GRADE_GROUPS, REGIONS } from "./deped";
 import type { GradeLevel, Region } from "./types";
@@ -57,27 +58,91 @@ export const schoolInfoSchema = z.object({
 });
 
 export const roleSchema = z.object({
-  role: z.enum(["class_adviser", "subject_teacher"], {
+  role: z.enum(["class_adviser", "floating_teacher"], {
     error: "Choose how you teach",
   }),
 });
 
-export const gradeSchema = z.object({
-  gradeLevel: z.enum(gradeCodes, { error: "Choose the grade level you handle" }),
+/** One advisory class: a grade level and the name of that section. */
+export const advisorySchema = z.object({
+  gradeLevel: z.enum(gradeCodes, { error: "Choose a grade level" }),
+  sectionName: z.string().trim().min(1, "Enter the section name").max(80),
 });
 
-/** Everything the wizard posts. The roster file in step 4 is not part of it. */
-export const onboardingSchema = schoolInfoSchema.extend({
-  ...roleSchema.shape,
-  ...gradeSchema.shape,
-});
+/**
+ * Everything the wizard posts. The roster file in step 4 is not part of it.
+ *
+ * Step 3 asks a different question depending on step 2's answer, so both
+ * shapes are held here and the refinement decides which one is required:
+ * a class adviser lists their advisory sections, a floating teacher names the
+ * single level they handle. The other is left empty and the server does the
+ * same, so switching role mid-wizard cannot smuggle a stale answer through.
+ */
+export const onboardingSchema = schoolInfoSchema
+  .extend({
+    ...roleSchema.shape,
+    gradeLevel: z.enum(gradeCodes).optional(),
+    // Required rather than defaulted: a `.default()` would make zod's input
+    // and output types differ, and react-hook-form binds to one type for
+    // both. The form's defaultValues supply the empty array instead.
+    advisories: z.array(advisorySchema).max(20),
+  })
+  .superRefine((value, ctx) => {
+    if (value.role === "class_adviser") {
+      if (value.advisories.length === 0) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["advisories"],
+          message: "Add at least one advisory class",
+        });
+      }
+
+      // Two advisories at the same grade level are normal — that is the whole
+      // point of asking for the section name — but the same section twice is
+      // a slip worth catching before it reaches the unique index.
+      const seen = new Set<string>();
+      value.advisories.forEach((a, i) => {
+        const key = `${a.gradeLevel}/${a.sectionName.trim().toLowerCase()}`;
+        if (seen.has(key)) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["advisories", i, "sectionName"],
+            message: "You have already added this section",
+          });
+        }
+        seen.add(key);
+      });
+    } else if (value.role === "floating_teacher" && !value.gradeLevel) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["gradeLevel"],
+        message: "Choose the grade level you handle",
+      });
+    }
+  });
 
 export type OnboardingValues = z.infer<typeof onboardingSchema>;
+export type AdvisoryValues = z.infer<typeof advisorySchema>;
 
-/** Field names per step, in the order the wizard shows them. */
-export const ONBOARDING_STEP_FIELDS: Array<Array<keyof OnboardingValues>> = [
-  ["region", "division", "schoolId", "schoolName", "schoolYear", "schoolHead"],
-  ["role"],
-  ["gradeLevel"],
-  [],
-];
+/**
+ * Field names per step, for the Continue button to validate.
+ *
+ * A function rather than a constant because step 3 validates `advisories` for
+ * a class adviser and `gradeLevel` for a floating teacher — validating both
+ * would block Continue on whichever question is not being asked.
+ */
+export function onboardingStepFields(
+  step: number,
+  role: OnboardingValues["role"] | undefined,
+): Array<FieldPath<OnboardingValues>> {
+  switch (step) {
+    case 0:
+      return ["region", "division", "schoolId", "schoolName", "schoolYear", "schoolHead"];
+    case 1:
+      return ["role"];
+    case 2:
+      return role === "class_adviser" ? ["advisories"] : ["gradeLevel"];
+    default:
+      return [];
+  }
+}

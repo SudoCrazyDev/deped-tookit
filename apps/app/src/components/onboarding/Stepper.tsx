@@ -72,7 +72,9 @@ export function Stepper({ steps, current }: { steps: string[]; current: number }
 
             return (
               <li
-                key={label}
+                // Keyed by position, not label: step 3's label changes with the
+                // role, and keying on it would remount that node mid-wizard.
+                key={i}
                 className="relative z-10 flex min-w-0 flex-1 flex-col items-center gap-2 px-1 text-center"
                 aria-current={active ? "step" : undefined}
               >
