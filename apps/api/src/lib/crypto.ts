@@ -2,41 +2,69 @@
  * Password hashing and session signing using only Web Crypto, which is what
  * Workers gives us — no native bcrypt/argon2 binary to ship.
  *
- * PBKDF2-SHA256 at 210k iterations follows the OWASP 2023 recommendation.
+ * OWASP recommends 600,000 iterations for PBKDF2-HMAC-SHA256, but workerd
+ * refuses any single deriveBits call above 100,000 — it throws
+ * "Pbkdf2 failed: iteration counts above 100000 are not supported", which
+ * surfaces as a 500 on every signup. Six chained passes of 100,000 reach the
+ * same total work: each pass is keyed by the previous pass's output, so the
+ * chain is strictly sequential and an attacker still pays 600,000 HMAC
+ * iterations per candidate password.
  */
 
-const ITERATIONS = 210_000;
+/** workerd's per-call ceiling. Raising this past 100,000 breaks every hash. */
+const PASS_ITERATIONS = 100_000;
+/** 6 x 100,000 = the 600,000 OWASP asks for with SHA-256. */
+const PASSES = 6;
 const KEY_LENGTH_BITS = 256;
 const SALT_BYTES = 16;
 
+/** Both the per-pass count and the pass count are stored, so a later change to
+ *  either still verifies the passwords hashed before it. */
+const SCHEME = "pbkdf2-chain";
+
 export async function hashPassword(password: string): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
-  const hash = await pbkdf2(password, salt);
-  return `pbkdf2$${ITERATIONS}$${toBase64(salt)}$${toBase64(hash)}`;
+  const hash = await derive(password, salt);
+  return `${SCHEME}$${PASS_ITERATIONS}$${PASSES}$${toBase64(salt)}$${toBase64(hash)}`;
 }
 
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
-  const [scheme, iterations, saltB64, hashB64] = stored.split("$");
-  if (scheme !== "pbkdf2") return false;
+  const [scheme, iterations, passes, saltB64, hashB64] = stored.split("$");
+  if (scheme !== SCHEME || !iterations || !passes || !saltB64 || !hashB64) return false;
 
   const salt = fromBase64(saltB64);
   const expected = fromBase64(hashB64);
-  const actual = await pbkdf2(password, salt, Number(iterations));
+  const actual = await derive(password, salt, Number(iterations), Number(passes));
   return timingSafeEqual(actual, expected);
 }
 
-async function pbkdf2(
+/**
+ * PBKDF2 applied `passes` times, each pass re-keyed with the previous pass's
+ * output. Chaining rather than one long call is forced by the 100,000-iteration
+ * ceiling above; the salt is constant throughout, so the work is
+ * iterations x passes.
+ */
+async function derive(
   password: string,
   salt: Uint8Array,
-  iterations = ITERATIONS,
+  iterations = PASS_ITERATIONS,
+  passes = PASSES,
 ): Promise<Uint8Array> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(password),
-    "PBKDF2",
-    false,
-    ["deriveBits"],
-  );
+  let material: BufferSource = new TextEncoder().encode(password);
+  for (let i = 0; i < passes; i++) {
+    material = await pbkdf2(material, salt, iterations);
+  }
+  return material as Uint8Array;
+}
+
+async function pbkdf2(
+  keyMaterial: BufferSource,
+  salt: Uint8Array,
+  iterations: number,
+): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey("raw", keyMaterial, "PBKDF2", false, [
+    "deriveBits",
+  ]);
   const bits = await crypto.subtle.deriveBits(
     { name: "PBKDF2", hash: "SHA-256", salt, iterations },
     key,
